@@ -10,6 +10,7 @@ from .giftcard.schema import GiftCardMutations, GiftCardQueries
 from .invoice.schema import InvoiceMutations
 from .menu.schema import MenuMutations, MenuQueries
 from .meta.schema import MetaMutations
+from .notification.schema import NotificationQueries, NotificationMutations
 from .order.schema import OrderMutations, OrderQueries
 from .page.schema import PageMutations, PageQueries
 from .payment.schema import PaymentMutations, PaymentQueries
@@ -42,6 +43,7 @@ class Query(
     TranslationQueries,
     WarehouseQueries,
     WebhookQueries,
+    NotificationQueries,
 ):
     pass
 
@@ -65,6 +67,7 @@ class Mutation(
     ShopMutations,
     WarehouseMutations,
     WebhookMutations,
+    NotificationMutations,
 ):
     pass
 

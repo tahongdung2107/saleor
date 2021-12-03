@@ -36,6 +36,10 @@ class MenuPermissions(BasePermissionEnum):
     MANAGE_MENUS = "menu.manage_menus"
 
 
+class NotificationPermissions(BasePermissionEnum):
+    MANAGE_NOTIFICATIONS = "notification.manage_notification"
+
+
 class CheckoutPermissions(BasePermissionEnum):
     MANAGE_CHECKOUTS = "checkout.manage_checkouts"
 
@@ -136,6 +140,6 @@ def get_permissions(permissions=None):
         codenames = split_permission_codename(permissions)
     return (
         Permission.objects.filter(codename__in=codenames)
-        .prefetch_related("content_type")
-        .order_by("codename")
+            .prefetch_related("content_type")
+            .order_by("codename")
     )
