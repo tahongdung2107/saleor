@@ -18,6 +18,7 @@ from mptt.managers import TreeManager
 from mptt.models import MPTTModel
 from versatileimagefield.fields import PPOIField, VersatileImageField
 
+from .types import ProductVariantChannelStatus
 from ..core.db.fields import SanitizedJSONField
 from ..core.models import (
     ModelWithMetadata,
@@ -141,7 +142,7 @@ class ProductsQueryset(PublishedQuerySet):
         return self.published_with_variants()
 
     def sort_by_attribute(
-        self, attribute_pk: Union[int, str], descending: bool = False
+            self, attribute_pk: Union[int, str], descending: bool = False
     ):
         """Sort a query set by the values of the given product attribute.
 
@@ -322,8 +323,8 @@ class Product(SeoModel, ModelWithMetadata, PublishableModel):
 
     def is_available_for_purchase(self):
         return (
-            self.available_for_purchase is not None
-            and datetime.date.today() >= self.available_for_purchase
+                self.available_for_purchase is not None
+                and datetime.date.today() >= self.available_for_purchase
         )
 
 
@@ -537,7 +538,7 @@ class DigitalContentUrl(models.Model):
     )
 
     def save(
-        self, force_insert=False, force_update=False, using=None, update_fields=None
+            self, force_insert=False, force_update=False, using=None, update_fields=None
     ):
         if not self.token:
             self.token = str(uuid4()).replace("-", "")
@@ -907,3 +908,28 @@ class CollectionTranslation(SeoModelTranslation):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ProductVariantChannelListing(ModelWithMetadata):
+    product_class_qty = models.CharField(max_length=250, blank=True, null=True)
+    product_class_value = models.CharField(max_length=250, blank=True, null=True)
+    product_class_recommendation = models.CharField(max_length=250, blank=True, null=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        related_name="ProductVariantChannelListings",
+        on_delete=models.SET_NULL,
+    )
+    approved_by = models.CharField(max_length=250, blank=True, null=True)
+    approved_date = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(
+        choices=ProductVariantChannelStatus.CHOICES, default=ProductVariantChannelStatus.DRAFT,
+        max_length=60
+    )
+
+    class Meta:
+        ordering = ("product_class_qty",)
+
+    def __str__(self) -> str:
+        return self.product_class_qty

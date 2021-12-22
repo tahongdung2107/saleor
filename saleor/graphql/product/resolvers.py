@@ -7,6 +7,10 @@ from ..utils.filters import filter_by_period
 from .filters import filter_products_by_stock_availability
 
 
+def resolve_products_variant_channel(info, **_kwargs):
+    return models.ProductVariantChannelListing.objects.all()
+
+
 def resolve_attributes(info, qs=None, **_kwargs):
     requestor = get_user_or_app_from_context(info.context)
     qs = qs or models.Attribute.objects.get_visible_to_user(requestor)
@@ -69,8 +73,8 @@ def resolve_product_variant_by_sku(info, sku):
     )
     return (
         models.ProductVariant.objects.filter(product__id__in=visible_products)
-        .filter(sku=sku)
-        .first()
+            .filter(sku=sku)
+            .first()
     )
 
 

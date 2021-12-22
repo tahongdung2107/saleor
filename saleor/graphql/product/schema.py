@@ -27,6 +27,8 @@ from .bulk_mutations.products import (
     ProductVariantStocksCreate,
     ProductVariantStocksDelete,
     ProductVariantStocksUpdate,
+    ProductVariantChannelBulkCreate, ProductVariantChannelBulkUpdate,
+    ProductVariantChannelBulkDelete,
 )
 from .enums import StockAvailability
 from .filters import (
@@ -106,7 +108,8 @@ from .mutations.products import (
     ProductVariantUpdateMeta,
     ProductVariantUpdatePrivateMeta,
     VariantImageAssign,
-    VariantImageUnassign,
+    VariantImageUnassign, ProductVariantChannelCreate, ProductVariantChannelUpdate,
+    ProductVariantChannelDelete,
 )
 from .resolvers import (
     resolve_attributes,
@@ -120,7 +123,7 @@ from .resolvers import (
     resolve_product_variant_by_sku,
     resolve_product_variants,
     resolve_products,
-    resolve_report_product_sales,
+    resolve_report_product_sales, resolve_products_variant_channel,
 )
 from .sorters import (
     AttributeSortingInput,
@@ -137,10 +140,23 @@ from .types import (
     Product,
     ProductType,
     ProductVariant,
+    ProductVariantChannelListingType,
 )
 
 
 class ProductQueries(graphene.ObjectType):
+    products_variant_channel = graphene.List(
+        ProductVariantChannelListingType,
+        description="List of the product variant channel",
+    )
+
+    product_variant_channel = graphene.Field(
+        ProductVariantChannelListingType,
+        id=graphene.Argument(
+            graphene.ID, description="ID of the Product.", required=True
+        ),
+        description="Look up an product variant by ID.",
+    )
     digital_content = graphene.Field(
         DigitalContent,
         description="Look up digital content by ID.",
@@ -182,7 +198,7 @@ class ProductQueries(graphene.ObjectType):
     )
     collection = graphene.Field(
         Collection,
-        id=graphene.Argument(graphene.ID, description="ID of the collection.",),
+        id=graphene.Argument(graphene.ID, description="ID of the collection.", ),
         slug=graphene.Argument(graphene.String, description="Slug of the category"),
         description="Look up a collection by ID.",
     )
@@ -194,7 +210,7 @@ class ProductQueries(graphene.ObjectType):
     )
     product = graphene.Field(
         Product,
-        id=graphene.Argument(graphene.ID, description="ID of the product.",),
+        id=graphene.Argument(graphene.ID, description="ID of the product.", ),
         slug=graphene.Argument(graphene.String, description="Slug of the category"),
         description="Look up a product by ID.",
     )
@@ -228,7 +244,7 @@ class ProductQueries(graphene.ObjectType):
     )
     product_variant = graphene.Field(
         ProductVariant,
-        id=graphene.Argument(graphene.ID, description="ID of the product variant.",),
+        id=graphene.Argument(graphene.ID, description="ID of the product variant.", ),
         sku=graphene.Argument(
             graphene.String, description="Sku of the product variant."
         ),
@@ -251,6 +267,13 @@ class ProductQueries(graphene.ObjectType):
         ),
         description="List of top selling products.",
     )
+
+    def resolve_products_variant_channel(self, info, **kwargs):
+        return resolve_products_variant_channel(info, **kwargs)
+
+    def resolve_product_variant_channel(self, info, id):
+        return graphene.Node.get_node_from_global_id(info, id,
+                                                     ProductVariantChannelListingType)
 
     def resolve_attributes(self, info, **kwargs):
         return resolve_attributes(info, **kwargs)
@@ -317,6 +340,12 @@ class ProductQueries(graphene.ObjectType):
 
 
 class ProductMutations(graphene.ObjectType):
+    product_variant_channel_create = ProductVariantChannelCreate.Field()
+    product_variant_channel_update = ProductVariantChannelUpdate.Field()
+    product_variant_channel_delete = ProductVariantChannelDelete.Field()
+    product_variant_channel_bulk_create = ProductVariantChannelBulkCreate.Field()
+    product_variant_channel_bulk_update = ProductVariantChannelBulkUpdate.Field()
+    product_variant_channel_bulk_delete = ProductVariantChannelBulkDelete.Field()
     attribute_create = AttributeCreate.Field()
     attribute_delete = AttributeDelete.Field()
     attribute_bulk_delete = AttributeBulkDelete.Field()
