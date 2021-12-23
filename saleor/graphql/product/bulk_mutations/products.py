@@ -1,9 +1,10 @@
 from collections import defaultdict
-
+from django.utils import timezone
 import graphene
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from ..enums import StatusProductChannelEnum
 from ....core.permissions import ProductPermissions, ProductTypePermissions
 from ....order import OrderStatus, models as order_models
 from ....product import models
@@ -38,6 +39,48 @@ from ..mutations.products import (
 )
 from ..types import Product, ProductVariant, ProductVariantChannelListingInput
 from ..utils import create_stocks, get_used_variants_attribute_values
+
+
+class ProductVariantChannelBulkUpdateStatus(BaseMutation):
+    class Arguments:
+        ids = graphene.List(
+            graphene.ID, required=True, description="List of products IDs to update."
+        )
+        status = graphene.List(
+            StatusProductChannelEnum, required=True,
+            description="status of product")
+
+    class Meta:
+        description = "update status product"
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, root, info, **data):
+        cls.update_status_product_channel(info, data)
+        return cls()
+
+    @classmethod
+    @transaction.atomic
+    def update_status_product_channel(cls, info, data):
+        objs = []
+        product_channel_listing = models.ProductVariantChannelListing
+        for index, product_id in enumerate(data["ids"]):
+            obj = cls.get_node_or_error(info, product_id, product_channel_listing)
+            obj.approved_by = info.context.user
+            obj.approved_date = timezone.now()
+            obj.status = data["status"][index]
+            obj.updated_by = info.context.user
+            objs.append(obj)
+        product_channel_listing.objects.bulk_update(objs,
+                                                    ["updated_by",
+                                                     "approved_by",
+                                                     "approved_date",
+                                                     "status"
+                                                     ],
+                                                    batch_size=1000)
 
 
 class ProductVariantChannelBulkCreate(BaseMutation):
@@ -90,7 +133,6 @@ class ProductVariantChannelBulkUpdate(ProductVariantChannelBulkCreate):
     @classmethod
     @transaction.atomic
     def update_or_create_product_channel(cls, info, data, ids):
-        # print("id user :", info.context.user.pk)
         objs = []
         product_channel_listing = models.ProductVariantChannelListing
         for index, product_id in enumerate(ids):

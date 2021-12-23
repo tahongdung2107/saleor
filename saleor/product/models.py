@@ -921,7 +921,13 @@ class ProductVariantChannelListing(ModelWithMetadata):
         related_name="ProductVariantChannelListings",
         on_delete=models.SET_NULL,
     )
-    approved_by = models.CharField(max_length=250, blank=True, null=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        related_name="ProductVariantChannelListing",
+        on_delete=models.SET_NULL,
+    )
     approved_date = models.DateTimeField(blank=True, null=True)
     status = models.CharField(
         choices=ProductVariantChannelStatus.CHOICES, default=ProductVariantChannelStatus.DRAFT,

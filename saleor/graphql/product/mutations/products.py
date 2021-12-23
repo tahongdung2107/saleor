@@ -1,4 +1,5 @@
 import datetime
+from django.utils import timezone
 from collections import defaultdict
 from typing import Iterable, List, Tuple, Union
 
@@ -10,6 +11,7 @@ from django.utils.text import slugify
 from graphene.types import InputObjectType
 from graphql_relay import from_global_id
 
+from ..enums import StatusProductChannelEnum
 from ....core.exceptions import PermissionDenied
 from ....core.permissions import ProductPermissions, ProductTypePermissions
 from ....order import OrderStatus, models as order_models
@@ -62,6 +64,34 @@ from ..utils import (
     validate_attributes_input_for_variant,
 )
 from .common import ReorderInput
+
+
+class ProductVariantChannelUpdateStatus(ModelMutation):
+    class Arguments:
+        id = graphene.ID(required=True,
+                         description="ID of a product variant to update.")
+        status = StatusProductChannelEnum(required=True,
+                                          description="status of product")
+
+    class Meta:
+        description = "update status product"
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, _root, info, **data):
+        node_id = data.get("id")
+
+        instance = cls.get_node_or_error(info, node_id,
+                                         models.ProductVariantChannelListing)
+        instance.status = data.get("status")
+        instance.approved_date = timezone.now()
+        instance.approved_by = info.context.user
+        instance.updated_by = info.context.user
+        instance.save()
+        return cls()
 
 
 class ProductVariantChannelCreate(ModelMutation):

@@ -28,7 +28,7 @@ from .bulk_mutations.products import (
     ProductVariantStocksDelete,
     ProductVariantStocksUpdate,
     ProductVariantChannelBulkCreate, ProductVariantChannelBulkUpdate,
-    ProductVariantChannelBulkDelete,
+    ProductVariantChannelBulkDelete, ProductVariantChannelBulkUpdateStatus,
 )
 from .enums import StockAvailability
 from .filters import (
@@ -109,7 +109,7 @@ from .mutations.products import (
     ProductVariantUpdatePrivateMeta,
     VariantImageAssign,
     VariantImageUnassign, ProductVariantChannelCreate, ProductVariantChannelUpdate,
-    ProductVariantChannelDelete,
+    ProductVariantChannelDelete, ProductVariantChannelUpdateStatus,
 )
 from .resolvers import (
     resolve_attributes,
@@ -346,6 +346,8 @@ class ProductMutations(graphene.ObjectType):
     product_variant_channel_bulk_create = ProductVariantChannelBulkCreate.Field()
     product_variant_channel_bulk_update = ProductVariantChannelBulkUpdate.Field()
     product_variant_channel_bulk_delete = ProductVariantChannelBulkDelete.Field()
+    product_variant_channel_update_status = ProductVariantChannelUpdateStatus.Field()
+    product_variant_channel_bulk_update_status = ProductVariantChannelBulkUpdateStatus.Field()
     attribute_create = AttributeCreate.Field()
     attribute_delete = AttributeDelete.Field()
     attribute_bulk_delete = AttributeBulkDelete.Field()
