@@ -2,8 +2,13 @@ import graphene
 
 from ...product import AttributeInputType
 from ..core.enums import to_enum
+from ...product.types import ProductVariantChannelStatus
 
 AttributeInputTypeEnum = to_enum(AttributeInputType)
+
+from ..core.enums import to_enum
+
+StatusProductChannelEnum = to_enum(ProductVariantChannelStatus)
 
 
 class AttributeTypeEnum(graphene.Enum):

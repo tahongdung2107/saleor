@@ -1,15 +1,16 @@
 from collections import defaultdict
-
+from django.utils import timezone
 import graphene
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from ..enums import StatusProductChannelEnum
 from ....core.permissions import ProductPermissions, ProductTypePermissions
 from ....order import OrderStatus, models as order_models
 from ....product import models
 from ....product.error_codes import ProductErrorCode
 from ....product.tasks import update_product_minimal_variant_price_task
-from ....product.utils import delete_categories
+from ....product.utils import delete_categories, delete_product_variant_channel
 from ....product.utils.attributes import generate_name_for_variant
 from ....warehouse import models as warehouse_models
 from ....warehouse.error_codes import StockErrorCode
@@ -36,8 +37,143 @@ from ..mutations.products import (
     ProductVariantInput,
     StockInput,
 )
-from ..types import Product, ProductVariant
+from ..types import Product, ProductVariant, ProductVariantChannelListingInput
 from ..utils import create_stocks, get_used_variants_attribute_values
+
+
+class ProductVariantChannelBulkUpdateStatus(BaseMutation):
+    class Arguments:
+        ids = graphene.List(
+            graphene.ID, required=True, description="List of products IDs to update."
+        )
+        status = graphene.List(
+            StatusProductChannelEnum, required=True,
+            description="status of product")
+
+    class Meta:
+        description = "update status product"
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, root, info, **data):
+        cls.update_status_product_channel(info, data)
+        return cls()
+
+    @classmethod
+    @transaction.atomic
+    def update_status_product_channel(cls, info, data):
+        objs = []
+        product_channel_listing = models.ProductVariantChannelListing
+        for index, product_id in enumerate(data["ids"]):
+            obj = cls.get_node_or_error(info, product_id, product_channel_listing)
+            obj.approved_by = info.context.user
+            obj.approved_date = timezone.now()
+            obj.status = data["status"][index]
+            obj.updated_by = info.context.user
+            objs.append(obj)
+        product_channel_listing.objects.bulk_update(objs,
+                                                    ["updated_by",
+                                                     "approved_by",
+                                                     "approved_date",
+                                                     "status"
+                                                     ],
+                                                    batch_size=1000)
+
+
+class ProductVariantChannelBulkCreate(BaseMutation):
+    class Arguments:
+        product_variants = graphene.List(
+            ProductVariantChannelListingInput,
+            required=True,
+            description="Input list of product variants to create.",
+        )
+
+    class Meta:
+        description = "Creates product variants"
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, root, info, **data):
+        objs = [models.ProductVariantChannelListing(**vals) for vals in
+                data["product_variants"]]
+        models.ProductVariantChannelListing.objects.bulk_create(
+            objs)
+        return cls()
+
+
+class ProductVariantChannelBulkUpdate(ProductVariantChannelBulkCreate):
+    class Arguments:
+        ids = graphene.List(
+            graphene.ID, required=True, description="List of products IDs to update."
+        )
+        product_variants = graphene.List(
+            ProductVariantChannelListingInput,
+            required=True,
+            description="Input list of product variants to update.",
+        )
+
+    class Meta:
+        description = "Update product variant."
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, root, info, ids, **data):
+        product_data = data["product_variants"]
+        cls.update_or_create_product_channel(info, product_data, ids)
+        return cls()
+
+    @classmethod
+    @transaction.atomic
+    def update_or_create_product_channel(cls, info, data, ids):
+        objs = []
+        product_channel_listing = models.ProductVariantChannelListing
+        for index, product_id in enumerate(ids):
+            obj = cls.get_node_or_error(info, product_id, product_channel_listing)
+            obj.product_class_qty = data[index].get("product_class_qty", None)
+            obj.product_class_value = data[index].get("product_class_value", None)
+            obj.product_class_recommendation = data[index].get(
+                "product_class_recommendation", None)
+            obj.updated_by = info.context.user
+            obj.approved_by = data[index].get("approved_by", None)
+            obj.approved_date = data[index].get("approved_date", None)
+            obj.status = data[index].get("status", "draft")
+            objs.append(obj)
+        product_channel_listing.objects.bulk_update(objs,
+                                                    ['product_class_qty',
+                                                     "product_class_value",
+                                                     "product_class_recommendation",
+                                                     "updated_by",
+                                                     "approved_by",
+                                                     "approved_date",
+                                                     "status"
+                                                     ],
+                                                    batch_size=1000)
+
+
+class ProductVariantChannelBulkDelete(ModelBulkDeleteMutation):
+    class Arguments:
+        ids = graphene.List(
+            graphene.ID, required=True, description="List of products IDs to update."
+        )
+
+    class Meta:
+        description = "Update product variant."
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def bulk_action(cls, queryset):
+        delete_product_variant_channel(queryset.values_list("pk", flat=True))
 
 
 class CategoryBulkDelete(ModelBulkDeleteMutation):
@@ -110,7 +246,7 @@ class ProductBulkDelete(ModelBulkDeleteMutation):
         error_type_field = "product_errors"
 
     @classmethod
-    def perform_mutation(cls, _root, info, ids, **data):
+    def instance(cls, _root, info, ids, **data):
         _, pks = resolve_global_ids_to_primary_keys(ids, Product)
         variants = models.ProductVariant.objects.filter(product__pk__in=pks)
         # get draft order lines for products
@@ -175,12 +311,12 @@ class ProductVariantBulkCreate(BaseMutation):
 
     @classmethod
     def clean_variant_input(
-        cls,
-        info,
-        instance: models.ProductVariant,
-        data: dict,
-        errors: dict,
-        variant_index: int,
+            cls,
+            info,
+            instance: models.ProductVariant,
+            data: dict,
+            errors: dict,
+            variant_index: int,
     ):
         cleaned_input = ModelMutation.clean_input(
             info, instance, data, input_cls=ProductVariantBulkCreateInput
@@ -377,8 +513,8 @@ class ProductVariantBulkDelete(ModelBulkDeleteMutation):
 
         product_pks = list(
             models.Product.objects.filter(variants__in=pks)
-            .distinct()
-            .values_list("pk", flat=True)
+                .distinct()
+                .values_list("pk", flat=True)
         )
 
         response = super().perform_mutation(_root, info, ids, **data)
@@ -524,7 +660,7 @@ class ProductVariantStocksDelete(BaseMutation):
             required=True,
             description="ID of product variant for which stocks will be deleted.",
         )
-        warehouse_ids = graphene.List(graphene.NonNull(graphene.ID),)
+        warehouse_ids = graphene.List(graphene.NonNull(graphene.ID), )
 
     class Meta:
         description = "Delete stocks from product variant."

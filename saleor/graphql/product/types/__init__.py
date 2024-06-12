@@ -8,4 +8,6 @@ from .products import (
     ProductImage,
     ProductType,
     ProductVariant,
+    ProductVariantChannelListingType,
+    ProductVariantChannelListingInput,
 )

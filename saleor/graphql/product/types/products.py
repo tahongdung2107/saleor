@@ -7,6 +7,8 @@ from graphene import relay
 from graphene_federation import key
 from graphql.error import GraphQLError
 
+from ..enums import StatusProductChannelEnum
+from ....account.models import User
 from ....core.permissions import OrderPermissions, ProductPermissions
 from ....core.weight import convert_weight_to_default_weight_unit
 from ....product import models
@@ -68,8 +70,38 @@ from .attributes import Attribute, SelectedAttribute
 from .digital_contents import DigitalContent
 
 
+class ProductVariantChannelListingInput(graphene.InputObjectType):
+    product_class_qty = graphene.String(description="product quantity", required=True)
+    product_class_value = graphene.String(description="product value", required=True)
+    product_class_recommendation = graphene.String(description="product recommendation",
+                                                   required=True)
+    approved_by = graphene.String(description="product approved by")
+    approved_date = graphene.types.datetime.DateTime(
+        description="Date when event happened at in ISO 8601 format."
+    )
+    status = StatusProductChannelEnum(description="status of product")
+
+
+class ProductVariantChannelListingType(CountableDjangoObjectType):
+    product_class_qty = graphene.String(description="product quantity")
+    product_class_value = graphene.String(description="product value")
+    product_class_recommendation = graphene.String(description="product recommendation")
+    updated_by = graphene.Int(description="product update by")
+    approved_by = graphene.String(description="product approved by")
+    approved_date = graphene.types.datetime.DateTime(
+        description="Date when event happened at in ISO 8601 format."
+    )
+    status = StatusProductChannelEnum(description="status of product")
+
+    class Meta:
+        description = ("Product Variant Channel Listing model",)
+        only_fields = ["product_class_qty", "product_class_value", ]
+        interfaces = [relay.Node, ObjectWithMetadata]
+        model = models.ProductVariantChannelListing
+
+
 def resolve_attribute_list(
-    instance: Union[models.Product, models.ProductVariant], *, user
+        instance: Union[models.Product, models.ProductVariant], *, user
 ) -> List[SelectedAttribute]:
     """Resolve attributes from a product into a list of `SelectedAttribute`s.
 
@@ -292,7 +324,7 @@ class ProductVariant(CountableDjangoObjectType):
 
     @staticmethod
     def resolve_quantity_available(
-        root: models.ProductVariant, info, country_code=None
+            root: models.ProductVariant, info, country_code=None
     ):
         if not root.track_inventory:
             return settings.MAX_CHECKOUT_LINE_QUANTITY
@@ -360,8 +392,8 @@ class ProductVariant(CountableDjangoObjectType):
 
         return (
             DiscountsByDateTimeLoader(context)
-            .load(info.context.request_time)
-            .then(calculate_pricing_info)
+                .load(info.context.request_time)
+                .then(calculate_pricing_info)
         )
 
     @staticmethod
@@ -378,8 +410,8 @@ class ProductVariant(CountableDjangoObjectType):
 
         return (
             AvailableQuantityByProductVariantIdAndCountryCodeLoader(info.context)
-            .load((root.id, info.context.country))
-            .then(is_variant_in_stock)
+                .load((root.id, info.context.country))
+                .then(is_variant_in_stock)
         )
 
     @staticmethod
@@ -554,8 +586,8 @@ class Product(CountableDjangoObjectType):
 
         return (
             ImagesByProductIdLoader(info.context)
-            .load(root.id)
-            .then(return_first_thumbnail)
+                .load(root.id)
+                .then(return_first_thumbnail)
         )
 
     @staticmethod
@@ -588,8 +620,8 @@ class Product(CountableDjangoObjectType):
 
         return (
             DiscountsByDateTimeLoader(context)
-            .load(info.context.request_time)
-            .then(calculate_pricing_info)
+                .load(info.context.request_time)
+                .then(calculate_pricing_info)
         )
 
     @staticmethod

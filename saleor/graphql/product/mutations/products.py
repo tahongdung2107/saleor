@@ -1,4 +1,5 @@
 import datetime
+from django.utils import timezone
 from collections import defaultdict
 from typing import Iterable, List, Tuple, Union
 
@@ -10,6 +11,7 @@ from django.utils.text import slugify
 from graphene.types import InputObjectType
 from graphql_relay import from_global_id
 
+from ..enums import StatusProductChannelEnum
 from ....core.exceptions import PermissionDenied
 from ....core.permissions import ProductPermissions, ProductTypePermissions
 from ....order import OrderStatus, models as order_models
@@ -53,6 +55,7 @@ from ..types import (
     ProductImage,
     ProductType,
     ProductVariant,
+    ProductVariantChannelListingInput, ProductVariantChannelListingType
 )
 from ..utils import (
     create_stocks,
@@ -62,6 +65,91 @@ from ..utils import (
     validate_attributes_input_for_variant,
 )
 from .common import ReorderInput
+
+
+class ProductVariantChannelUpdateStatus(ModelMutation):
+    class Arguments:
+        id = graphene.ID(required=True,
+                         description="ID of a product variant to update.")
+        status = StatusProductChannelEnum(required=True,
+                                          description="status of product")
+
+    class Meta:
+        description = "update status product"
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, _root, info, **data):
+        node_id = data.get("id")
+
+        instance = cls.get_node_or_error(info, node_id,
+                                         models.ProductVariantChannelListing)
+        instance.status = data.get("status")
+        instance.approved_date = timezone.now()
+        instance.approved_by = info.context.user
+        instance.updated_by = info.context.user
+        instance.save()
+        return cls()
+
+
+class ProductVariantChannelCreate(ModelMutation):
+    class Arguments:
+        input = ProductVariantChannelListingInput(
+            required=True,
+            description="Fields required to create a product variant channel."
+        )
+
+    class Meta:
+        description = "Creates a new product variant."
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def save(cls, info, instance, cleaned_input):
+        instance.updated_by = info.context.user
+        instance.save()
+
+
+class ProductVariantChannelUpdate(ProductVariantChannelCreate):
+    class Arguments:
+        id = graphene.ID(required=True,
+                         description="ID of a product variant to update.")
+        input = ProductVariantChannelListingInput(
+            required=True, description="Fields required to update a product variant."
+        )
+
+    class Meta:
+        description = "Updates a product variant."
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+
+class ProductVariantChannelDelete(ModelDeleteMutation):
+    class Arguments:
+        id = graphene.ID(required=True,
+                         description="ID of a product variant to delete.")
+
+    class Meta:
+        description = "Deletes a product variant."
+        model = models.ProductVariantChannelListing
+        permissions = (ProductPermissions.MANAGE_PRODUCTS,)
+        error_type_class = ProductError
+        error_type_field = "product_errors"
+
+    @classmethod
+    def perform_mutation(cls, _root, info, **data):
+        node_id = data.get("id")
+        instance = cls.get_node_or_error(info, node_id,
+                                         only_type=ProductVariantChannelListingType)
+        instance.delete()
+        return cls.success_response(instance)
 
 
 class CategoryInput(graphene.InputObjectType):
@@ -609,12 +697,12 @@ class AttributeAssignmentMixin:
 
     @classmethod
     def _resolve_attribute_nodes(
-        cls,
-        qs: QuerySet,
-        *,
-        global_ids: List[str],
-        pks: Iterable[int],
-        slugs: Iterable[str],
+            cls,
+            qs: QuerySet,
+            *,
+            global_ids: List[str],
+            pks: Iterable[int],
+            slugs: Iterable[str],
     ):
         """Retrieve attributes nodes from given global IDs and/or slugs."""
         qs = qs.filter(Q(pk__in=pks) | Q(slug__in=slugs))
@@ -733,7 +821,7 @@ class AttributeAssignmentMixin:
 
     @classmethod
     def _validate_input(
-        cls, cleaned_input: T_INPUT_MAP, attribute_qs, is_variant: bool
+            cls, cleaned_input: T_INPUT_MAP, attribute_qs, is_variant: bool
     ):
         """Check if no invalid operations were supplied.
 
@@ -746,7 +834,7 @@ class AttributeAssignmentMixin:
 
     @classmethod
     def clean_input(
-        cls, raw_input: dict, attributes_qs: QuerySet, is_variant: bool
+            cls, raw_input: dict, attributes_qs: QuerySet, is_variant: bool
     ) -> T_INPUT_MAP:
         """Resolve and prepare the input for further checks.
 
@@ -831,7 +919,7 @@ class ProductCreate(ModelMutation):
 
     @classmethod
     def clean_attributes(
-        cls, attributes: dict, product_type: models.ProductType
+            cls, attributes: dict, product_type: models.ProductType
     ) -> T_INPUT_MAP:
         attributes_qs = product_type.product_attributes
         attributes = AttributeAssignmentMixin.clean_input(
@@ -1046,9 +1134,9 @@ class ProductUpdate(ProductCreate):
     def clean_sku(cls, product_type, cleaned_input):
         input_sku = cleaned_input.get("sku")
         if (
-            not product_type.has_variants
-            and input_sku
-            and models.ProductVariant.objects.filter(sku=input_sku).exists()
+                not product_type.has_variants
+                and input_sku
+                and models.ProductVariant.objects.filter(sku=input_sku).exists()
         ):
             raise ValidationError(
                 {
@@ -1209,7 +1297,7 @@ class ProductVariantCreate(ModelMutation):
 
     @classmethod
     def clean_attributes(
-        cls, attributes: dict, product_type: models.ProductType
+            cls, attributes: dict, product_type: models.ProductType
     ) -> T_INPUT_MAP:
         attributes_qs = product_type.variant_attributes
         attributes = AttributeAssignmentMixin.clean_input(
@@ -1219,7 +1307,7 @@ class ProductVariantCreate(ModelMutation):
 
     @classmethod
     def validate_duplicated_attribute_values(
-        cls, attributes, used_attribute_values, instance=None
+            cls, attributes, used_attribute_values, instance=None
     ):
         attribute_values = defaultdict(list)
         for attribute in attributes:
@@ -1234,7 +1322,7 @@ class ProductVariantCreate(ModelMutation):
 
     @classmethod
     def clean_input(
-        cls, info, instance: models.ProductVariant, data: dict, input_cls=None
+            cls, info, instance: models.ProductVariant, data: dict, input_cls=None
     ):
         cleaned_input = super().clean_input(info, instance, data)
 
@@ -1400,7 +1488,7 @@ class ProductVariantUpdate(ProductVariantCreate):
 
     @classmethod
     def validate_duplicated_attribute_values(
-        cls, attributes, used_attribute_values, instance=None
+            cls, attributes, used_attribute_values, instance=None
     ):
         # Check if the variant is getting updated,
         # and the assigned attributes do not change
